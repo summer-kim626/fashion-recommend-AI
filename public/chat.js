@@ -51,7 +51,7 @@
     try{
       const r = await api('/api/profile?uid=' + encodeURIComponent(uid));
       if(r.profile) profile = { ...EMPTY, ...r.profile };
-      $('saveState').textContent = '이 컴퓨터의 서버(data/profiles.json)에 저장돼요';
+      $('saveState').textContent = '서버에 저장돼요 · 이 브라우저의 사용자 ID로 구분해요';
     }catch(e){ $('saveState').textContent = e.message; }
     renderProfile();
   }

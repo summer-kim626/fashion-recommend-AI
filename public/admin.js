@@ -58,7 +58,7 @@
   const msg = (t, k) => { const m = $('adMsg'); m.textContent = t || ''; m.className = 'ad-msg ' + (k || ''); };
   const setDirty = v => { S.dirty = v; $('adDirty').hidden = !v; };
   AdminLogs.init({ token: () => S.token, msg: (t, k) => msg(t, k), onAuthFail: e => onAuthFail(e), previewBody: () => S.draft });
-  function storeLabel(){ $('adStore').textContent = S.server ? `서버 파일(data/store.json) · 버전 ${S.server.version}` + (S.server.updatedAt ? ` · 마지막 적용 ${S.server.updatedAt} (KST)` : ' · 아직 적용 기록 없음') : ''; }
+  function storeLabel(){ $('adStore').textContent = S.server ? `${S.storageLabel || '서버 저장소'} · 버전 ${S.server.version}` + (S.server.updatedAt ? ` · 마지막 적용 ${S.server.updatedAt} (KST)` : ' · 아직 적용 기록 없음') : ''; }
   function takeServer(st){ S.server = st; S.draft = clone({ data:st.data, prompts:st.prompts, settings:st.settings }); setDirty(false); storeLabel(); }
   function onAuthFail(err){ if(err.status === 401){ S.token = null; try{ sessionStorage.removeItem('admin_token'); }catch(e){} showLogin(); msg(''); $('adPwErr').textContent = '로그인이 만료됐어요. 다시 로그인해 주세요.'; return true; } return false; }
 
@@ -71,7 +71,7 @@
     }catch(err){ if(!onAuthFail(err)) $('adPwErr').textContent = err.message; }
   }
   window.onAdminOpen = async () => {
-    if(S.pwHint === null){ try{ const c = await api('/api/config'); S.pwHint = c.adminPasswordHint || ''; }catch(e){ S.pwHint = ''; } }
+    if(S.pwHint === null){ try{ const c = await api('/api/config'); S.pwHint = c.adminPasswordHint || ''; S.storageLabel = c.storageLabel; }catch(e){ S.pwHint = ''; } }
     $('adDemo').textContent = S.pwHint ? '데모용 비밀번호: ' + S.pwHint : '';
     if(S.token && !S.draft) enter(); else if(!S.token) showLogin();
   };
