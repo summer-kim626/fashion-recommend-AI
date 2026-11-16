@@ -1,151 +1,147 @@
-# 의류 맞춤 추천 챗봇 (탭4) + 관리자 페이지 — 로컬 버전 v2
+# 의류 맞춤 추천 AI 챗봇 + 관리자 페이지 (v3 · Firebase 배포 지원)
 
-claude.ai에서 만든 `챗봇_채팅UI_v8_20261116`의 **탭④ 의류 맞춤 추천**과 **관리자 페이지**만 따로 떼어,
-내 컴퓨터에서 Claude API로 실행할 수 있게 만든 프로젝트입니다. (2026-11-16 KST)
+성별·키·체중·연령대를 바탕으로 의류 사이즈와 코디를 추천하는 쇼핑몰 AI 챗봇과, 상품·재고·주문·프롬프트를 관리하고 대화를 검토해 **답변을 계속 개선하는 관리자 페이지**입니다. AI는 Claude API를 사용합니다.
 
-- 별도로 설치할 패키지가 없습니다. **Node.js만 있으면 됩니다.**
-- API 키는 프로젝트 폴더의 `.env` 파일에 넣습니다. 키는 서버에서만 쓰이고 브라우저로는 가지 않습니다.
 - 상품·재고·주문·배송 데이터는 모두 **가상 데이터**입니다.
+- 같은 코드를 **① 내 컴퓨터(로컬)** 와 **② Firebase(인터넷 배포)** 두 방식으로 실행할 수 있습니다.
+
+| | 로컬 실행 | Firebase 배포 |
+|---|---|---|
+| 화면 | `node server.js`가 `public/` 제공 | Firebase Hosting |
+| 서버 API | `server.js` → `functions/lib/app.js` | Cloud Functions(`api`, 서울 리전) → `functions/lib/app.js` |
+| 데이터 저장 | `data/*.json` 파일 | Firestore |
+| API 키·관리자 비밀번호 | `.env` 파일 | **Secret Manager** (코드·깃허브에 남지 않음) |
+| 관리자 비밀번호 화면 표시 | 기본 표시 | 기본 숨김 |
 
 ---
 
-## v2에서 추가된 기능 — 대화 기록·피드백·지침 (2026-11-16)
+## 주요 기능
 
-챗봇 답변을 관리자가 검토하고, 그 피드백을 다음 답변의 지침으로 계속 쌓아 **답변을 고도화**하는 흐름입니다.
+- **의류 맞춤 추천 챗봇:** 답변 직전에 사용자 정보·상품 카탈로그·재고·운영 정책·관리자 지침을 읽어 답변. 주문 조회는 서버의 조회 도구가 주문번호+이름이 모두 맞을 때만 결과 반환.
+- **관리자 페이지:** 상품·재고·주문·배송 표 편집(자동 계산·검증·동시 편집 충돌 방지), 배송비 숫자 설정, 운영 정책·AI 프롬프트 편집과 미리보기.
+- **대화 기록·피드백·지침:** 대화가 브라우저(localStorage)에 기록되고, 관리자가 답변마다 👍/👎·코멘트를 남긴 뒤 "지침에 반영"하면 서버에 저장되어 다음 답변부터 AI 지시문에 들어갑니다.
 
 ```
-사용자 대화 → [대화 기록] 자동 저장(브라우저 localStorage)
-            → 관리자가 답변마다 👍/👎 · 코멘트
-            → "AI로 지침 다듬기"(선택) → "지침에 반영" (서버 data/guidelines.json)
-            → 켜진 지침이 다음 답변부터 지시문 [관리자 피드백 지침]에 자동 포함
-            → 새 답변 기록에 "지침 N개 적용" 표시 → 다시 검토
+사용자 대화 → 대화 기록(브라우저) → 관리자 피드백 → (AI로 지침 다듬기) → 지침에 반영(서버)
+            → 다음 답변 지시문 [관리자 피드백 지침]에 자동 포함 → 다시 검토
 ```
 
-- **관리자 → "대화 기록" 탭:** 대화 목록, 질문·답변, 응답 시간, 사용한 내 정보, 주문 조회 결과, 적용된 지침을 봅니다. 필터(피드백 없음 / 👎 / 👍 / 오류)·검색·JSON 내보내기·전체 삭제가 있어요.
-- **관리자 → "피드백 지침" 탭:** 반영한 지침을 켜고 끄기, 문장 수정, 삭제, 직접 추가, AI가 받는 지시문 미리보기를 합니다. 켜진 지침은 최대 30개, 한 문장 300자까지예요.
-- **저장 위치가 두 군데라는 점에 주의하세요.**
-  - 대화 기록·피드백 → **브라우저 localStorage** (요청 사항). 챗봇과 관리자 화면을 **같은 브라우저**에서 열어야 보입니다. 다른 브라우저·다른 컴퓨터의 대화는 보이지 않고, 브라우저 데이터를 지우면 사라집니다. 중요한 기록은 "내보내기(JSON)"로 백업하세요.
-  - 지침 → **서버 파일 data/guidelines.json**. 브라우저와 상관없이 모든 답변에 적용됩니다.
-- **AI로 지침 다듬기**는 Claude API를 1번 호출합니다(비용 발생). 결과는 바로 저장되지 않고, 확인한 뒤 "지침에 반영"을 눌러야 적용돼요.
-- v1에서 쓰던 data/store.json은 그대로 쓸 수 있어요. 저장된 프롬프트에 `{{관리자피드백}}` 자리가 없으면 지침이 지시문 맨 끝에 자동으로 붙습니다.
+---
 
-## 1. 준비물
+## 1. 로컬에서 실행하기
 
-| 준비물 | 확인 방법 |
-|---|---|
-| Node.js 18 이상 | 터미널에서 `node -v` → `v18` 이상이면 OK. 없으면 https://nodejs.org 에서 LTS 버전 설치 |
-| Claude API 키 | https://platform.claude.com 에서 발급 (`sk-ant-`로 시작) |
+준비물: Node.js 18 이상, Claude API 키
 
-> 터미널 여는 법 — Mac: `Spotlight(⌘+Space)` → "터미널" / Windows: 시작 → "PowerShell"
-
-## 2. 처음 실행하기 (5단계)
-
-**① 압축을 풀고, 터미널에서 이 폴더로 이동**
 ```bash
-cd 압축푼경로/챗봇_탭4-관리자_로컬_v1_20261116
+cp .env.example .env          # Windows: copy .env.example .env
+# .env 파일을 열어 ANTHROPIC_API_KEY=sk-ant-... 입력
+npm run check                 # API 연결 확인
+npm start                     # http://localhost:3000
 ```
-> 팁: `cd ` 까지 친 다음 폴더를 터미널 창에 끌어다 놓으면 경로가 자동으로 입력돼요.
 
-**② `.env` 파일 만들기** (예시 파일을 복사)
+관리자: 오른쪽 위 "관리자" → 비밀번호(기본 1234, 로그인 화면에 표시)
+
+## 2. Firebase에 배포하기 (프로젝트 ID: `fashion-ai-chat`)
+
+### 2-1. 처음 한 번만 하는 준비
+
+1. **Firebase CLI 설치·로그인**
+   ```bash
+   npm install -g firebase-tools
+   firebase login
+   ```
+2. **요금제 업그레이드:** [Firebase 콘솔](https://console.firebase.google.com/project/fashion-ai-chat/usage/details)에서 **Blaze(종량제)**로 변경합니다. Secret Manager를 쓰는 Cloud Functions에 필요합니다. 같은 화면에서 **예산 알림**(예: 월 10,000원)을 꼭 설정하세요.
+3. **Firestore 만들기:** 콘솔 → Firestore Database → 데이터베이스 만들기 → 위치 **asia-northeast3(서울)**, **프로덕션 모드**.
+4. **함수 패키지 설치**
+   ```bash
+   cd functions && npm install && cd ..
+   ```
+5. **비밀 값 등록** (입력하는 값은 화면에 보이지 않아요)
+   ```bash
+   firebase functions:secrets:set ANTHROPIC_API_KEY --project fashion-ai-chat
+   firebase functions:secrets:set ADMIN_PASSWORD --project fashion-ai-chat   # 1234 말고 새 비밀번호!
+   ```
+
+### 2-2. 배포
+
 ```bash
-# Mac
-cp .env.example .env
-# Windows (PowerShell)
-copy .env.example .env
+npm run deploy      # = firebase deploy --project fashion-ai-chat (화면 + 함수 + Firestore 보안 규칙)
 ```
 
-**③ `.env`를 메모장/VS Code로 열고 API 키 넣기**
-```
-ANTHROPIC_API_KEY=sk-ant-여기에-내-키
-```
-> `.env`는 숨김 파일이라 Finder에서 안 보일 수 있어요. Mac은 `⌘+Shift+.` 을 누르면 보입니다.
+배포가 끝나면 **https://fashion-ai-chat.web.app** 에서 열립니다. 처음 접속하면 Firestore에 기본(가상) 데이터가 자동으로 만들어집니다.
 
-**④ 연결 확인** (선택이지만 권장)
+### 2-3. 수정 후 다시 배포
+
+코드나 화면을 고친 뒤 `npm run deploy`를 다시 실행하면 됩니다. 데이터(Firestore)와 비밀 값은 그대로 유지됩니다. 화면만 바꿨다면 `firebase deploy --only hosting`이 더 빠릅니다.
+
+### 2-4. 비밀이 아닌 설정 바꾸기
+
+`functions/.env.fashion-ai-chat` 파일(깃허브에 올라가도 되는 값만)을 고치고 다시 배포하세요.
+
+| 항목 | 기본값 | 설명 |
+|---|---|---|
+| `CLAUDE_MODEL` | `claude-sonnet-5-5` | 더 저렴하게: `claude-haiku-5-5` |
+| `SHOW_ADMIN_PASSWORD` | `false` | `true`면 로그인 화면에 비밀번호 표시 (공개 사이트에서는 비권장) |
+| `RATE_CHAT_PER_MIN` | `20` | IP당 1분 대화 요청 수 (서버 인스턴스별) |
+| `RATE_LOGIN_PER_MIN` | `10` | IP당 1분 로그인 시도 수 |
+
+### 2-5. 보안·비용 체크리스트
+
+- [ ] API 키는 Secret Manager에만 있음 (`.env`·코드·깃허브에 없음)
+- [ ] 관리자 비밀번호를 1234에서 바꿈
+- [ ] Firebase 예산 알림 설정
+- [ ] [Anthropic 콘솔](https://platform.claude.com)에서 월 사용 한도 설정
+- [ ] Firestore 보안 규칙(`firestore.rules`)은 브라우저 직접 접근을 모두 막음 — 데이터는 함수(Admin SDK)로만 읽고 씀
+- [ ] 동시에 켜지는 함수 인스턴스 최대 5개(`functions/index.js`의 `maxInstances`)
+
+### 2-6. (선택) 배포 전 내 컴퓨터에서 Firebase처럼 실행하기
+
+Java가 필요합니다. `functions/.secret.local` 파일을 만들고(깃허브에 올라가지 않음) 아래처럼 적은 뒤 실행하세요.
+```
+ANTHROPIC_API_KEY=sk-ant-...
+ADMIN_PASSWORD=1234
+```
 ```bash
-npm run check
+firebase emulators:start --project fashion-ai-chat     # http://127.0.0.1:5000
 ```
-`✓ 연결 성공` 이 나오면 OK. 실패하면 아래 "문제 해결"을 보세요.
 
-**⑤ 서버 켜기**
-```bash
-npm start
-```
-브라우저에서 **http://localhost:3000** 을 엽니다. 끌 때는 터미널에서 `Ctrl + C`.
+---
 
-## 3. 사용법
+## 3. 알아둘 점
 
-- **챗봇:** 위의 "정보 설정"에서 성별·키·체중·연령대를 저장한 뒤 질문하세요.
-  주문 조회 예시: `주문번호 MO-20261113-0006, 강지호예요. 배송 어디예요?`
-- **관리자:** 오른쪽 위 "관리자" 버튼 (또는 http://localhost:3000/#admin) → 비밀번호 **1234** (화면에 표시됨)
-  - 상품·재고·주문·배송 표를 고치고 **적용**하면 챗봇의 다음 답변부터 반영됩니다.
-  - "정책·프롬프트" 탭에서 배송비 숫자, 운영 정책, AI 지시문을 고치고 "AI가 받는 내용 미리보기"로 확인할 수 있어요.
+- **대화 기록은 브라우저 localStorage에 저장됩니다.** 그래서 Firebase에 배포하면 **관리자는 자기 브라우저에서 나눈 대화만** 볼 수 있습니다. 다른 사용자들의 대화를 검토하려면 대화 기록을 Firestore(서버)에 저장하도록 바꿔야 합니다. 이 경우 개인정보 고지와 보관 기간 정책도 함께 필요합니다.
+- **관리자 로그인 세션**은 로컬에서는 메모리에(서버 재시작 시 다시 로그인), Firebase에서는 Firestore `adminSessions`에 토큰 해시로 저장됩니다(8시간 유지).
+- **요청 횟수 제한**은 서버 인스턴스별 1차 방어입니다. 비용 사고를 막는 최종 장치는 예산 알림과 Anthropic 사용 한도입니다.
+- **남은 결함:** 주문 조회 뒤 대화를 이어가면 AI가 사실과 다른 사과를 할 수 있음(LD1), 재고를 채워도 입고예정일이 남음(LD2).
 
 ## 4. 폴더 구조
 
 ```
-챗봇_탭4-관리자_로컬_v1_20261116/
-├─ .env.example       ← 설정 예시 (복사해서 .env로)
-├─ server.js          ← 서버: 화면 제공, API 키 보관, Claude 호출, 관리자 인증
-├─ lib/
-│  ├─ claude.js       ← Claude API 호출 + 주문 조회 도구 처리
-│  ├─ prompt.js       ← 지시문 조립, 재고·금액 계산, 입력 검증
-│  ├─ store.js        ← 데이터 파일 읽기/쓰기
-│  ├─ guidelines.js   ← 관리자 피드백 지침 저장·수정 (v2)
-│  └─ env.js          ← .env 읽기
-├─ public/            ← 브라우저 화면 (HTML·CSS·JS)
-├─ data/
-│  ├─ seed.json       ← 처음 데이터·프롬프트 (수정하지 않음)
-│  ├─ store.json      ← 관리자가 적용한 데이터 (첫 실행 때 자동 생성)
-│  ├─ guidelines.json ← 관리자 피드백 지침 (첫 반영 때 자동 생성, v2)
-│  └─ profiles.json   ← 사용자별 체형 정보 (자동 생성)
-└─ scripts/
-   ├─ check-api.js    ← npm run check (API 연결 확인)
-   └─ test.js         ← npm test (자동 테스트 43건, 가짜 Claude 사용 → 비용 없음)
+├─ public/                  화면 (Firebase Hosting)
+├─ functions/               서버 (Cloud Functions)
+│  ├─ index.js              Firebase 진입점: Secret Manager 값 연결, 서울 리전
+│  ├─ lib/app.js            API 처리 (로컬·Firebase 공용)
+│  ├─ lib/claude.js         Claude API 호출 + 주문 조회 도구 반복
+│  ├─ lib/prompt.js         지시문 조립·재고/금액 계산·검증
+│  ├─ lib/guidelines.js     관리자 피드백 지침 규칙
+│  ├─ lib/storage/file.js   로컬 저장 (data/*.json)
+│  ├─ lib/storage/firestore.js  Firebase 저장 (Firestore)
+│  ├─ data/seed.json        처음 데이터·프롬프트
+│  └─ .env.fashion-ai-chat  배포용 비밀 아닌 설정
+├─ server.js                로컬 실행용 서버
+├─ firebase.json · .firebaserc · firestore.rules
+├─ .env.example             로컬용 설정 예시 (.env는 깃허브에 올리지 않음)
+└─ scripts/test.js          자동 테스트 (npm test, 가짜 Claude 사용 → 비용 없음)
 ```
 
-**데이터를 처음 상태로 되돌리기:** 서버를 끄고 `data/store.json` 을 지운 뒤 다시 켜면 됩니다.
-(관리자 화면의 "초기 데이터 불러오기" → "적용"으로도 가능)
+## 5. 문제 해결
 
-## 5. claude.ai 버전과 달라진 점
-
-| 항목 | claude.ai 버전 (v8) | 로컬 버전 (이 프로젝트) |
-|---|---|---|
-| AI 호출 | claude.ai 계정 | `.env`의 API 키 (사용량만큼 비용 발생) |
-| 답변 표시 | 글자 실시간 표시 | 답변이 완성되면 한 번에 표시 |
-| 주문 데이터 | 페이지 코드에 전부 포함 | **서버에만 있음.** 주문 조회 도구도 서버에서 실행 |
-| 관리자 비밀번호 | 브라우저에서 확인 | **서버에서 확인**, 로그인해야 데이터 수정 가능 |
-| 동시 편집 | 나중 적용이 덮어씀 | 버전 비교로 **충돌 시 적용 거부** 후 안내 |
-| 대화 기록 | 전부 전송 | 최근 20개만 전송 (비용·길이 제한) |
-| 탭4 지시문 | 운영 정책 없음 | 배송·반품 질문에 답하도록 `{{운영정책}}` 추가 |
-| 체형 정보 저장 | claude.ai 계정별 | 이 컴퓨터의 `data/profiles.json` (브라우저별 구분) |
-
-**아직 남은 한계**
-- 주문을 조회한 뒤 대화를 이어가면 AI가 "앞에서는 조회하지 않았다"며 사실과 다른 사과를 할 수 있어요. 대화 기록에 도구 사용 내역이 AI 쪽으로 전달되지 않기 때문이에요. (로컬 테스트 보고서 LD1, v2에서도 미해결 — 피드백 지침으로 완화는 가능하지만 근본 수정이 필요)
-- 재고를 채워도 **입고예정일은 자동으로 지워지지 않습니다.** 관리자에서 직접 비워야 AI가 "입고 예정"이라고 잘못 말하지 않아요. (테스트 보고서 D3)
-- 체형 정보는 브라우저마다 따로 저장됩니다. 로그인 기능은 없습니다.
-- 기본 설정은 **내 컴퓨터에서만 접속**(`127.0.0.1`)됩니다. 다른 기기에서 접속하게 하려면 `.env`에 `HOST=0.0.0.0` 을 넣되, 그 경우 관리자 비밀번호를 꼭 바꾸세요.
-
-## 6. 비용 안내
-
-메시지 1번마다 지시문(규칙 + 상품 10개 카탈로그 + 내 정보)과 최근 대화가 함께 전송됩니다.
-비용은 사용한 모델과 길이에 따라 달라지니 https://platform.claude.com 의 가격 페이지와 사용량 화면에서 확인하세요.
-더 저렴하게 쓰려면 `.env`에서 `CLAUDE_MODEL=claude-haiku-5-5` 로 바꿔 보세요.
-
-## 7. 문제 해결
-
-| 화면/터미널 메시지 | 원인과 해결 |
+| 메시지 | 해결 |
 |---|---|
-| `node: command not found` | Node.js가 없어요 → https://nodejs.org 에서 설치 후 터미널을 새로 여세요 |
-| `API 키가 없어요` | `.env` 파일이 없거나 키가 비어 있어요 → 2단계 ②③ 다시 확인, 서버 재시작 |
-| `API 키가 올바르지 않거나 권한이 없어요` | 키 오타, 만료, 결제 미등록 → platform.claude.com에서 키·결제 확인 |
-| `모델을 찾을 수 없어요` | `.env`의 `CLAUDE_MODEL` 값 확인 (예: `claude-sonnet-5-5`) |
-| `EADDRINUSE` (포트 사용 중) | 이미 서버가 켜져 있거나 다른 프로그램이 3000번 사용 → `.env`에서 `PORT=3001` |
-| `다른 곳에서 먼저 적용했어요` | 다른 창에서 먼저 적용함 → "새로 불러오기" 후 다시 수정 |
-| `요청 형식 오류: ... anthropic-version` | API 버전 헤더 문제 → `.env`의 `ANTHROPIC_VERSION`을 공식 문서 값으로 수정 |
+| 배포 시 `Secret Manager API` 또는 `Blaze` 관련 오류 | 2-1의 요금제 업그레이드 후 다시 배포 |
+| 화면에 `API 키가 올바르지 않거나…` | `firebase functions:secrets:set ANTHROPIC_API_KEY`로 다시 등록 후 `firebase deploy --only functions` |
+| 화면에 `서버 오류가 났어요` | Firestore 데이터베이스를 만들었는지 확인, `firebase functions:log`로 원인 확인 |
+| 관리자 비밀번호를 잊음 | `firebase functions:secrets:set ADMIN_PASSWORD`로 새로 등록 후 함수 다시 배포 |
+| `요청이 너무 많아요` | 1분 뒤 다시 시도, 필요하면 `RATE_CHAT_PER_MIN` 조정 |
 
-## 8. 개발자용 메모
-
-- 자동 테스트: `npm test` (가짜 Claude 서버 + 임시 데이터 폴더 사용, 실제 데이터·비용에 영향 없음)
-- API: `GET /api/config`, `GET|PUT /api/profile`, `POST /api/chat`, `POST /api/admin/login`, `GET|PUT /api/admin/state`, `GET /api/admin/defaults`, `POST /api/admin/preview`, `POST /api/admin/logout`, `GET|POST /api/admin/guidelines`, `PATCH|DELETE /api/admin/guidelines/:id`, `POST /api/admin/guidelines/draft`
-- 대화 기록 localStorage 키: `fit_chat_logs_v1`(세션·메시지), `fit_chat_feedback_v1`(답변별 피드백)
-- Claude Messages API 문서: https://platform.claude.com/docs/en/api/messages
+자동 테스트: `npm test` (서버 46건) · Claude Messages API 문서: https://platform.claude.com/docs/en/api/messages

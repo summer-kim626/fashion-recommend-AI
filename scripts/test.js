@@ -28,8 +28,8 @@ const check = (id, name, pass, detail = '') => { results.push({ id, name, pass:!
 
 mock.listen(0, '127.0.0.1', async () => {
   Object.assign(process.env, { ANTHROPIC_BASE_URL:'http://127.0.0.1:' + mock.address().port, ANTHROPIC_API_KEY:'test-key', CLAUDE_MODEL:'test-model', ADMIN_PASSWORD:'1234', DATA_DIR:tmp });
-  const { server } = require('../server');
-  require('../lib/store').load();
+  const { server, storage } = require('../server');
+  await storage.getState();
   server.listen(0, '127.0.0.1', async () => {
     const base = 'http://127.0.0.1:' + server.address().port;
     const call = async (p, { method = 'GET', body, token } = {}) => {
@@ -128,6 +128,17 @@ mock.listen(0, '127.0.0.1', async () => {
       r = await call('/api/admin/guidelines/' + g1.id, { method:'PATCH', body:{ active:true } }); check('T42', '로그인 없이 지침 수정 차단', r.status === 401);
       st = (await call('/api/admin/state', { token:tk })).json; const v0 = JSON.parse(JSON.stringify(st)); v0.version = 0;
       r = await call('/api/admin/state', { method:'PUT', token:tk, body:v0 }); check('T43', '충돌 안내 시각 표시 정상(LD4)', r.status === 409 && !r.json.error.includes('( KST)'), r.json.error);
+
+      /* ---- v3: 배포 대비 ---- */
+      r = await call('/api/config'); check('T44', '설정 정보에 저장소 종류 표시(로컬=file)', r.json.storage === 'file' && !!r.json.storageLabel);
+      process.env.RATE_LOGIN_PER_MIN = '3';
+      const codes = []; for(let i = 0; i < 4; i++) codes.push((await call('/api/admin/login', { method:'POST', body:{ password:'x' } })).status);
+      check('T45', '로그인 시도 횟수 제한(1분 3회 설정 → 4번째 429)', codes[3] === 429, codes.join(','));
+      process.env.RATE_CHAT_PER_MIN = '1';
+      const c1 = (await call('/api/chat', { method:'POST', body:{ uid, messages:[{ role:'user', content:'a' }] } })).status;
+      const c2 = await call('/api/chat', { method:'POST', body:{ uid, messages:[{ role:'user', content:'b' }] } });
+      check('T46', '대화 요청 횟수 제한 → 429 한국어 안내', c2.status === 429 && c2.json.error.includes('1분'), `${c1},${c2.status}`);
+      delete process.env.RATE_CHAT_PER_MIN; delete process.env.RATE_LOGIN_PER_MIN;
     }catch(e){ check('ERR', '예외 발생', false, e.stack); }
     const pass = results.filter(x => x.pass).length;
     console.log(`\n합계 ${pass}/${results.length}`);

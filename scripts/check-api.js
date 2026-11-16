@@ -1,8 +1,8 @@
 // API 키·모델이 제대로 동작하는지 한 번 호출해서 확인: npm run check
 'use strict';
 const path = require('path');
-require('../lib/env').loadEnv(path.join(__dirname, '..', '.env'));
-const { chat } = require('../lib/claude');
+require('../functions/lib/env').loadEnv(path.join(__dirname, '..', '.env'));
+const { chat } = require('../functions/lib/claude');
 (async () => {
   console.log('모델:', process.env.CLAUDE_MODEL || 'claude-sonnet-5-5');
   if(!process.env.ANTHROPIC_API_KEY){ console.log('✗ .env에 ANTHROPIC_API_KEY가 없어요.'); process.exit(1); }
