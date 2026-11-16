@@ -1,0 +1,13 @@
+{
+  "name": "fit-chatbot-local",
+  "version": "2.0.0",
+  "description": "의류 맞춤 추천 챗봇(탭4) + 관리자 페이지 로컬 버전 (Claude API)",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node scripts/check-api.js",
+    "test": "node scripts/test.js"
+  },
+  "engines": { "node": ">=18" }
+}
